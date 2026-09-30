@@ -7,7 +7,7 @@ import sys
 from typing import Any
 
 import requests
-from openai import AzureOpenAI
+from openai import APIConnectionError, APIStatusError, AzureOpenAI
 
 
 def required_env(name: str) -> str:
@@ -32,25 +32,38 @@ def github_request(method: str, url: str, token: str, **kwargs: Any) -> requests
 
 
 def review_diff(diff: str) -> str:
+    endpoint = required_env("AZURE_OPENAI_ENDPOINT").strip()
     client = AzureOpenAI(
         api_key=required_env("AZURE_OPENAI_API_KEY"),
-        azure_endpoint=required_env("AZURE_OPENAI_ENDPOINT"),
+        azure_endpoint=endpoint,
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
     )
-    response = client.chat.completions.create(
-        model=required_env("AZURE_OPENAI_DEPLOYMENT"),
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You review pull requests. Summarize the change briefly, identify concrete "
-                    "bugs or risks, and suggest practical improvements. Keep the review concise."
-                ),
-            },
-            {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
-        ],
-        max_tokens=1000,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=required_env("AZURE_OPENAI_DEPLOYMENT"),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You review pull requests. Summarize the change briefly, identify concrete "
+                        "bugs or risks, and suggest practical improvements. Keep the review concise."
+                    ),
+                },
+                {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
+            ],
+            max_tokens=1000,
+        )
+    except APIConnectionError as exc:
+        raise RuntimeError(
+            f"Could not connect to Azure OpenAI endpoint {endpoint!r}. "
+            "Check that the endpoint secret is the exact HTTPS URL without quotes. "
+            f"Underlying error: {exc}"
+        ) from exc
+    except APIStatusError as exc:
+        raise RuntimeError(
+            f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
+            "Check the API key, deployment name, and API version secrets."
+        ) from exc
     return response.choices[0].message.content or "The model returned an empty review."
 
 
