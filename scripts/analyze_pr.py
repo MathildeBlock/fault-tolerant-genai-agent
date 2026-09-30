@@ -46,12 +46,13 @@ def review_diff(diff: str) -> str:
                     "role": "system",
                     "content": (
                         "You review pull requests. Summarize the change briefly, identify concrete "
-                        "bugs or risks, and suggest practical improvements. Keep the review concise."
+                        "bugs or risks, and suggest practical improvements. Keep the review concise. "
+                        "Return the review as visible plain text with headings and bullet points."
                     ),
                 },
                 {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
             ],
-            max_completion_tokens=1000,
+            max_completion_tokens=3000,
         )
     except APIConnectionError as exc:
         raise RuntimeError(
@@ -66,7 +67,13 @@ def review_diff(diff: str) -> str:
             f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
             f"Response: {detail}"
         ) from exc
-    return response.choices[0].message.content or "The model returned an empty review."
+    message = response.choices[0].message
+    if message.content and message.content.strip():
+        return message.content.strip()
+    refusal = getattr(message, "refusal", None)
+    if refusal:
+        return f"The model declined to review this diff: {refusal}"
+    return "The model returned no visible review text. Please review the diff manually."
 
 
 def main() -> None:
