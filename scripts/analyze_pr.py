@@ -51,7 +51,7 @@ def review_diff(diff: str) -> str:
                 },
                 {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
             ],
-            max_tokens=1000,
+            max_completion_tokens=1000,
         )
     except APIConnectionError as exc:
         raise RuntimeError(
