@@ -60,9 +60,11 @@ def review_diff(diff: str) -> str:
             f"Underlying error: {exc}"
         ) from exc
     except APIStatusError as exc:
+        response_detail = getattr(exc, "response", None)
+        detail = response_detail.text if response_detail is not None else str(exc)
         raise RuntimeError(
             f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
-            "Check the API key, deployment name, and API version secrets."
+            f"Response: {detail}"
         ) from exc
     return response.choices[0].message.content or "The model returned an empty review."
 
