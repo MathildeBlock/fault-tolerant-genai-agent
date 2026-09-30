@@ -13,6 +13,7 @@ from openai import APIConnectionError, APIStatusError, AzureOpenAI, OpenAIError
 
 MINIMUM_AZURE_API_DATE = date(2024, 12, 1)
 API_VERSION_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-preview)?$")
+MAX_DIFF_CHARACTERS = 60000
 
 
 def required_env(name: str) -> str:
@@ -56,6 +57,14 @@ def configured_api_version() -> str:
     return api_version
 
 
+def prepare_diff(diff: str) -> str:
+    if len(diff) <= MAX_DIFF_CHARACTERS:
+        return diff
+    return (
+        diff[:MAX_DIFF_CHARACTERS]
+        + "\n\n[Diff truncated to fit the model context window.]")
+
+
 def review_diff(diff: str) -> str:
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "<missing>").strip()
     try:
@@ -75,7 +84,10 @@ def review_diff(diff: str) -> str:
                         "Return the review as visible plain text with headings and bullet points."
                     ),
                 },
-                {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
+                {
+                    "role": "user",
+                    "content": f"Review this pull request diff:\n\n{prepare_diff(diff)}",
+                },
             ],
             max_completion_tokens=3000,
         )

@@ -89,6 +89,8 @@ Terraform is only required for this validation step; it does not deploy resource
 
 The default container image is a public placeholder nginx image listening on port 80. The skeleton does not configure private registry credentials; add registry configuration before using a private image. Set `container_image` and `container_port` to values matching an image containing this FastAPI application for a real deployment. Terraform uses a short generated App Service plan name and adds a 12-character random suffix to the Web App name, substantially reducing collisions while respecting Azure naming limits.
 
+With the default nginx image, the `api_url` Terraform output is only the URL of the placeholder Web App; it is not a functioning deployment of this FastAPI API until `container_image` is replaced with an image containing the application.
+
 Custom `app_name` values must be 2-47 characters using lowercase letters, numbers, or hyphens. They cannot start or end with a hyphen. The Terraform validation also requires `container_port` to be an integer from 1 through 65535.
 
 For `terraform plan` or `terraform apply`, AzureRM v4 requires a subscription ID. After `az login`, set it for the current PowerShell session:

@@ -41,6 +41,70 @@ def test_review_diff_handles_empty_choices(monkeypatch):
     assert "no review choices" in result
 
 
+def test_prepare_diff_truncates_large_input():
+    diff = "x" * (analyze_pr.MAX_DIFF_CHARACTERS + 100)
+
+    prepared = analyze_pr.prepare_diff(diff)
+
+    assert len(prepared) > analyze_pr.MAX_DIFF_CHARACTERS
+    assert len(prepared) < len(diff)
+    assert "Diff truncated" in prepared
+
+
+def test_review_diff_returns_successful_review(monkeypatch):
+    class SuccessfulClient:
+        def __init__(self, **kwargs):
+            message = SimpleNamespace(content="## Summary\nLooks good.", refusal=None)
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: SimpleNamespace(
+                        choices=[SimpleNamespace(message=message)]
+                    )
+                )
+            )
+
+    configure_review_environment(monkeypatch)
+    monkeypatch.setattr(analyze_pr, "AzureOpenAI", SuccessfulClient)
+
+    assert analyze_pr.review_diff("diff") == "## Summary\nLooks good."
+
+
+def test_review_diff_reports_refusal(monkeypatch):
+    class RefusingClient:
+        def __init__(self, **kwargs):
+            message = SimpleNamespace(content=None, refusal="The diff is unavailable.")
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: SimpleNamespace(
+                        choices=[SimpleNamespace(message=message)]
+                    )
+                )
+            )
+
+    configure_review_environment(monkeypatch)
+    monkeypatch.setattr(analyze_pr, "AzureOpenAI", RefusingClient)
+
+    assert "declined to review" in analyze_pr.review_diff("diff")
+
+
+def test_review_diff_reports_empty_content(monkeypatch):
+    class EmptyContentClient:
+        def __init__(self, **kwargs):
+            message = SimpleNamespace(content="", refusal=None)
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: SimpleNamespace(
+                        choices=[SimpleNamespace(message=message)]
+                    )
+                )
+            )
+
+    configure_review_environment(monkeypatch)
+    monkeypatch.setattr(analyze_pr, "AzureOpenAI", EmptyContentClient)
+
+    assert "no visible review text" in analyze_pr.review_diff("diff")
+
+
 def configure_review_environment(monkeypatch):
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
