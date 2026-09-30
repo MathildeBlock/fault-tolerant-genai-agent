@@ -21,7 +21,7 @@ provider "azurerm" {
 }
 
 resource "random_string" "app_suffix" {
-  length  = 6
+  length  = 12
   special = false
   upper   = false
 }
