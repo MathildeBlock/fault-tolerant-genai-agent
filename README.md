@@ -67,3 +67,8 @@ terraform validate
 ```
 
 The default container image is a placeholder nginx image listening on port 80. Set `container_image` and `container_port` to values matching an image containing this FastAPI application when using the skeleton for a real deployment. Terraform adds a short random suffix to the app name so the default Web App name is globally unique.
+
+
+## Part 5: Production Design Decision
+
+For production, I would replace the in-memory ticket storage with a persistent database. The current API loses all tickets whenever it restarts, so durable storage would be the most important improvement.
