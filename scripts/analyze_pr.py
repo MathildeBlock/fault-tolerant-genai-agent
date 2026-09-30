@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import date
 from typing import Any
 
 import requests
 from openai import APIConnectionError, APIStatusError, AzureOpenAI
+
+MINIMUM_AZURE_API_DATE = date(2024, 12, 1)
 
 
 def required_env(name: str) -> str:
@@ -31,12 +34,28 @@ def github_request(method: str, url: str, token: str, **kwargs: Any) -> requests
     return response
 
 
+def configured_api_version() -> str:
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview").strip()
+    try:
+        version_date = date.fromisoformat(api_version[:10])
+    except ValueError as exc:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must start with a valid YYYY-MM-DD date."
+        ) from exc
+    if version_date < MINIMUM_AZURE_API_DATE:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must be 2024-12-01 or newer because this "
+            "review uses max_completion_tokens."
+        )
+    return api_version
+
+
 def review_diff(diff: str) -> str:
     endpoint = required_env("AZURE_OPENAI_ENDPOINT").strip()
     client = AzureOpenAI(
         api_key=required_env("AZURE_OPENAI_API_KEY"),
         azure_endpoint=endpoint,
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
+        api_version=configured_api_version(),
     )
     try:
         response = client.chat.completions.create(

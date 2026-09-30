@@ -50,4 +50,6 @@ AZURE_OPENAI_DEPLOYMENT
 AZURE_OPENAI_API_VERSION
 ```
 
+Use API version `2024-12-01-preview` or newer. The review model requires the `max_completion_tokens` parameter supported by that API version.
+
 The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
