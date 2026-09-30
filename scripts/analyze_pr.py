@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from datetime import date
 from typing import Any
@@ -11,6 +12,7 @@ import requests
 from openai import APIConnectionError, APIStatusError, AzureOpenAI
 
 MINIMUM_AZURE_API_DATE = date(2024, 12, 1)
+API_VERSION_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-preview)?$")
 
 
 def required_env(name: str) -> str:
@@ -36,6 +38,10 @@ def github_request(method: str, url: str, token: str, **kwargs: Any) -> requests
 
 def configured_api_version() -> str:
     api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview").strip()
+    if not API_VERSION_PATTERN.fullmatch(api_version):
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must use YYYY-MM-DD or YYYY-MM-DD-preview format."
+        )
     try:
         version_date = date.fromisoformat(api_version[:10])
     except ValueError as exc:
@@ -86,6 +92,8 @@ def review_diff(diff: str) -> str:
             f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
             f"Response: {detail}"
         ) from exc
+    if not response.choices:
+        return "The model returned no review choices. Please review the diff manually."
     message = response.choices[0].message
     if message.content and message.content.strip():
         return message.content.strip()
