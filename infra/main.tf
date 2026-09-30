@@ -6,11 +6,21 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
 provider "azurerm" {
   features {}
+}
+
+resource "random_string" "app_suffix" {
+  length  = 6
+  special = false
+  upper   = false
 }
 
 resource "azurerm_resource_group" "api" {
@@ -19,7 +29,7 @@ resource "azurerm_resource_group" "api" {
 }
 
 resource "azurerm_service_plan" "api" {
-  name                = "${var.app_name}-plan"
+  name                = "${var.app_name}-${random_string.app_suffix.result}-plan"
   resource_group_name = azurerm_resource_group.api.name
   location            = azurerm_resource_group.api.location
   os_type             = "Linux"
@@ -27,7 +37,7 @@ resource "azurerm_service_plan" "api" {
 }
 
 resource "azurerm_linux_web_app" "api" {
-  name                = var.app_name
+  name                = "${var.app_name}-${random_string.app_suffix.result}"
   resource_group_name = azurerm_resource_group.api.name
   location            = azurerm_service_plan.api.location
   service_plan_id     = azurerm_service_plan.api.id

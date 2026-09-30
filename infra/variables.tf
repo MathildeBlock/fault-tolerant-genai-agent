@@ -11,9 +11,9 @@ variable "resource_group_name" {
 }
 
 variable "app_name" {
-  description = "Globally unique Azure Web App name."
+  description = "Prefix for the globally unique Azure Web App name."
   type        = string
-  default     = "fault-tolerant-genai-api-demo"
+  default     = "fault-tolerant-genai-api"
 }
 
 variable "service_plan_sku" {
@@ -31,5 +31,5 @@ variable "container_image" {
 variable "container_port" {
   description = "Port exposed by the container."
   type        = number
-  default     = 8000
+  default     = 80
 }
