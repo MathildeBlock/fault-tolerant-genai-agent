@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 
 import requests
-from openai import APIConnectionError, APIStatusError, AzureOpenAI
+from openai import APIConnectionError, APIStatusError, AzureOpenAI, OpenAIError
 
 MINIMUM_AZURE_API_DATE = date(2024, 12, 1)
 API_VERSION_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-preview)?$")
@@ -57,13 +57,13 @@ def configured_api_version() -> str:
 
 
 def review_diff(diff: str) -> str:
-    endpoint = required_env("AZURE_OPENAI_ENDPOINT").strip()
-    client = AzureOpenAI(
-        api_key=required_env("AZURE_OPENAI_API_KEY"),
-        azure_endpoint=endpoint,
-        api_version=configured_api_version(),
-    )
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "<missing>").strip()
     try:
+        client = AzureOpenAI(
+            api_key=required_env("AZURE_OPENAI_API_KEY"),
+            azure_endpoint=required_env("AZURE_OPENAI_ENDPOINT").strip(),
+            api_version=configured_api_version(),
+        )
         response = client.chat.completions.create(
             model=required_env("AZURE_OPENAI_DEPLOYMENT"),
             messages=[
@@ -91,6 +91,10 @@ def review_diff(diff: str) -> str:
         raise RuntimeError(
             f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
             f"Response: {detail}"
+        ) from exc
+    except (OpenAIError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"Azure OpenAI configuration error for endpoint {endpoint!r}: {exc}"
         ) from exc
     if not response.choices:
         return "The model returned no review choices. Please review the diff manually."

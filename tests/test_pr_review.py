@@ -70,6 +70,18 @@ def test_review_diff_reports_connection_errors(monkeypatch):
         analyze_pr.review_diff("diff")
 
 
+def test_review_diff_reports_configuration_errors(monkeypatch):
+    class InvalidConfigurationClient:
+        def __init__(self, **kwargs):
+            raise ValueError("invalid endpoint")
+
+    configure_review_environment(monkeypatch)
+    monkeypatch.setattr(analyze_pr, "AzureOpenAI", InvalidConfigurationClient)
+
+    with pytest.raises(RuntimeError, match="configuration error"):
+        analyze_pr.review_diff("diff")
+
+
 def test_review_diff_reports_api_status_errors(monkeypatch):
     class FailingClient:
         def __init__(self, **kwargs):
