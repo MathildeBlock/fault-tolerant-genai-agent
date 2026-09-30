@@ -39,6 +39,7 @@ Run the tests with:
 ## Part 3: AI PR Review Bot
 
 The workflow in `.github/workflows/pr-review.yml` runs when a pull request is opened or updated. It fetches the pull request diff, sends it to the configured Azure OpenAI deployment, and posts one review comment.
+The automated review is informational and does not block merging.
 
 Configure these GitHub repository secrets before using the workflow:
 
