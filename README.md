@@ -1,5 +1,22 @@
 # fault-tolerant-genai-agent
 
+## Prerequisites and Setup
+
+Install Python 3.11 or newer. From the repository root, create the virtual environment and install the dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+PowerShell activation is optional; all commands below use the virtual environment directly. Copy `env.example` to `.env` only if you want to use Azure OpenAI model-driven mode:
+
+```powershell
+Copy-Item env.example .env
+```
+
+Keep the real API key in `.env` only. The local CLI mode and automated tests do not require an Azure OpenAI key.
+
 ## Part 1: Mock API
 
 From the repository root, start the API:
@@ -50,6 +67,8 @@ AZURE_OPENAI_DEPLOYMENT
 AZURE_OPENAI_API_VERSION
 ```
 
+The workflow does not run on ordinary branch pushes. To test it, push the workflow to GitHub and open a pull request, or push another commit to an existing pull request. Check the repository's **Actions** tab for the run and the pull request for the generated comment.
+
 Use API version `2024-12-01-preview` or newer. The review model requires the `max_completion_tokens` parameter supported by that API version.
 
 The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
@@ -65,6 +84,8 @@ cd infra
 terraform init
 terraform validate
 ```
+
+Terraform is only required for this validation step; it does not deploy resources. Run `terraform init` before `terraform validate` so the AzureRM and Random providers are downloaded.
 
 The default container image is a placeholder nginx image listening on port 80. Set `container_image` and `container_port` to values matching an image containing this FastAPI application when using the skeleton for a real deployment. Terraform adds a short random suffix to the app name so the default Web App name is globally unique.
 
