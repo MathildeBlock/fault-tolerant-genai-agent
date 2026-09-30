@@ -15,6 +15,9 @@ terraform {
 
 provider "azurerm" {
   features {}
+
+  # AzureRM v4 needs this for plan/apply; null allows ARM_SUBSCRIPTION_ID.
+  subscription_id = var.subscription_id
 }
 
 resource "random_string" "app_suffix" {

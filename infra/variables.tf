@@ -1,3 +1,10 @@
+variable "subscription_id" {
+  description = "Azure subscription ID. Can also be supplied with ARM_SUBSCRIPTION_ID."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "location" {
   description = "Azure region for the API resources."
   type        = string
