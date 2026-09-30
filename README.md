@@ -87,7 +87,7 @@ terraform validate
 
 Terraform is only required for this validation step; it does not deploy resources. Run `terraform init` before `terraform validate` so the AzureRM and Random providers are downloaded.
 
-The default container image is a public placeholder nginx image listening on port 80. The skeleton does not configure private registry credentials; add registry configuration before using a private image. Set `container_image` and `container_port` to values matching an image containing this FastAPI application for a real deployment. Terraform adds a 12-character random suffix to substantially reduce Web App name collisions, although uniqueness is not mathematically guaranteed.
+The default container image is a public placeholder nginx image listening on port 80. The skeleton does not configure private registry credentials; add registry configuration before using a private image. Set `container_image` and `container_port` to values matching an image containing this FastAPI application for a real deployment. Terraform uses a short generated App Service plan name and adds a 12-character random suffix to the Web App name, substantially reducing collisions while respecting Azure naming limits.
 
 Custom `app_name` values must be 2-47 characters using lowercase letters, numbers, or hyphens. They cannot start or end with a hyphen. The Terraform validation also requires `container_port` to be an integer from 1 through 65535.
 
