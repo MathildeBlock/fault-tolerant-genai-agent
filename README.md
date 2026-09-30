@@ -53,3 +53,17 @@ AZURE_OPENAI_API_VERSION
 Use API version `2024-12-01-preview` or newer. The review model requires the `max_completion_tokens` parameter supported by that API version.
 
 The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
+
+## Part 4: Terraform Azure Skeleton
+
+The `infra/` folder describes a minimal Azure deployment using a resource group, Linux App Service plan, and Linux Web App. It does not deploy anything by itself and does not create networking, storage accounts, or Key Vault resources.
+
+Validate the Terraform configuration:
+
+```powershell
+cd infra
+terraform init
+terraform validate
+```
+
+The default container image is a placeholder. Set `container_image` to an image containing this FastAPI application when using the skeleton for a real deployment.
