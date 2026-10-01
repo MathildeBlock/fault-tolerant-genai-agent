@@ -1,7 +1,9 @@
 import httpx
+import pytest
+from types import SimpleNamespace
 
 from agent.agent import TicketAgent
-from agent.client import TicketAPIClient
+from agent.client import TicketAPIClient, TicketAPIError, TicketTools
 
 
 def make_agent(handler):
@@ -69,3 +71,108 @@ def test_agent_handles_non_uuid_ticket_id():
     response = agent.respond("Update ticket non-existent-id to CLOSED")
     assert "could not find" in response.lower()
     assert "non-existent-id" in response
+
+
+def test_llm_agent_omits_reasoning_by_default_for_standard_azure_model(monkeypatch):
+    monkeypatch.delenv("AZURE_OPENAI_REASONING_EFFORT", raising=False)
+    calls = []
+
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    calls.append(kwargs)
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="Done", tool_calls=None)
+                            )
+                        ]
+                    )
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "gpt-4o-mini"
+    agent.llm_client = MockLLM()
+
+    assert agent.respond("List my tickets") == "Done"
+    assert "reasoning_effort" not in calls[0]
+
+
+def test_llm_agent_uses_reasoning_effort_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "medium")
+    calls = []
+
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    calls.append(kwargs)
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="Done", tool_calls=None)
+                            )
+                        ]
+                    )
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "custom-o-series-deployment"
+    agent.llm_client = MockLLM()
+
+    assert agent.respond("List my tickets") == "Done"
+    assert calls[0]["reasoning_effort"] == "medium"
+
+
+def test_llm_agent_returns_actionable_error_for_invalid_reasoning_effort(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "unsupported")
+
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    raise AssertionError("should not call Azure when config is invalid")
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "custom-o-series-deployment"
+    agent.llm_client = MockLLM()
+
+    response = agent.respond("List my tickets")
+    assert "AZURE_OPENAI_REASONING_EFFORT" in response
+    assert "low, medium, high" in response
+
+
+def test_update_tool_leaves_status_validation_to_api():
+    update_tool = next(
+        tool for tool in TicketTools.definitions()
+        if tool["function"]["name"] == "update_ticket"
+    )
+    status_schema = update_tool["function"]["parameters"]["properties"]["status"]
+
+    assert "enum" not in status_schema
+
+
+def test_client_reports_empty_success_response():
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=b""))
+    client = httpx.Client(base_url="http://ticket-api", transport=transport)
+    api = TicketAPIClient("http://ticket-api", client=client)
+
+    with pytest.raises(TicketAPIError, match="empty or invalid JSON"):
+        api.update_ticket("ticket-id", status="RESOLVED")

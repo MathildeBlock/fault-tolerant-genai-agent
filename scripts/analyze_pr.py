@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
+from datetime import date
 from typing import Any
 
 import requests
-from openai import AzureOpenAI
+from openai import APIConnectionError, APIStatusError, AzureOpenAI, OpenAIError
+
+MINIMUM_AZURE_API_DATE = date(2024, 12, 1)
+API_VERSION_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-preview)?$")
+MAX_DIFF_CHARACTERS = 60000
 
 
 def required_env(name: str) -> str:
@@ -31,27 +37,100 @@ def github_request(method: str, url: str, token: str, **kwargs: Any) -> requests
     return response
 
 
+def configured_api_version() -> str:
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview").strip()
+    if not API_VERSION_PATTERN.fullmatch(api_version):
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must use YYYY-MM-DD or YYYY-MM-DD-preview format."
+        )
+    try:
+        version_date = date.fromisoformat(api_version[:10])
+    except ValueError as exc:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must start with a valid YYYY-MM-DD date."
+        ) from exc
+    if version_date < MINIMUM_AZURE_API_DATE:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_VERSION must be 2024-12-01 or newer because this "
+            "review uses max_completion_tokens."
+        )
+    return api_version
+
+
+def prepare_diff(diff: str) -> str:
+    if len(diff) <= MAX_DIFF_CHARACTERS:
+        return diff
+    return (
+        diff[:MAX_DIFF_CHARACTERS]
+        + "\n\n[Diff truncated to fit the model context window.]")
+
+
+def review_notice(review: str, diff: str) -> str:
+    if len(diff) > MAX_DIFF_CHARACTERS:
+        return (
+            "[Warning: This review is incomplete because the pull request diff was "
+            "truncated to fit the model context window.]\n\n"
+            + review
+        )
+    return review
+
+
 def review_diff(diff: str) -> str:
-    client = AzureOpenAI(
-        api_key=required_env("AZURE_OPENAI_API_KEY"),
-        azure_endpoint=required_env("AZURE_OPENAI_ENDPOINT"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "<missing>").strip()
+    try:
+        client = AzureOpenAI(
+            api_key=required_env("AZURE_OPENAI_API_KEY"),
+            azure_endpoint=required_env("AZURE_OPENAI_ENDPOINT").strip(),
+            api_version=configured_api_version(),
+        )
+        response = client.chat.completions.create(
+            model=required_env("AZURE_OPENAI_DEPLOYMENT"),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You review pull requests. Summarize the change briefly, identify concrete "
+                        "bugs or risks, and suggest practical improvements. Keep the review concise. "
+                        "Return the review as visible plain text with headings and bullet points."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Review this pull request diff:\n\n{prepare_diff(diff)}",
+                },
+            ],
+            max_completion_tokens=3000,
+        )
+    except APIConnectionError as exc:
+        raise RuntimeError(
+            f"Could not connect to Azure OpenAI endpoint {endpoint!r}. "
+            "Check that the endpoint secret is the exact HTTPS URL without quotes. "
+            f"Underlying error: {exc}"
+        ) from exc
+    except APIStatusError as exc:
+        response_detail = getattr(exc, "response", None)
+        detail = response_detail.text if response_detail is not None else str(exc)
+        raise RuntimeError(
+            f"Azure OpenAI rejected the request with HTTP {exc.status_code}. "
+            f"Response: {detail}"
+        ) from exc
+    except (OpenAIError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"Azure OpenAI configuration error for endpoint {endpoint!r}: {exc}"
+        ) from exc
+    if not response.choices:
+        return review_notice(
+            "The model returned no review choices. Please review the diff manually.", diff
+        )
+    message = response.choices[0].message
+    if message.content and message.content.strip():
+        return review_notice(message.content.strip(), diff)
+    refusal = getattr(message, "refusal", None)
+    if refusal:
+        return review_notice(f"The model declined to review this diff: {refusal}", diff)
+    return review_notice(
+        "The model returned no visible review text. Please review the diff manually.", diff
     )
-    response = client.chat.completions.create(
-        model=required_env("AZURE_OPENAI_DEPLOYMENT"),
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You review pull requests. Summarize the change briefly, identify concrete "
-                    "bugs or risks, and suggest practical improvements. Keep the review concise."
-                ),
-            },
-            {"role": "user", "content": f"Review this pull request diff:\n\n{diff}"},
-        ],
-        max_tokens=1000,
-    )
-    return response.choices[0].message.content or "The model returned an empty review."
 
 
 def main() -> None:

@@ -7,12 +7,16 @@ import os
 import re
 from typing import Any
 
+from openai import OpenAIError
+
 from .client import TicketAPIClient, TicketAPIError, TicketTools
 
 
 SYSTEM_PROMPT = """You are a support-ticket assistant. Use the ticket tools for every ticket operation.
 Never invent ticket data. When a tool returns an error, explain its detail clearly and tell the user
-what they can do next. Valid statuses are OPEN, RESOLVED, and CLOSED."""
+what they can do next. Valid statuses are OPEN, RESOLVED, and CLOSED. Do not silently translate or
+normalize an unsupported status such as PROGRESS; pass the user's status to the update tool so the
+ticket API can validate it and return its actionable error message."""
 
 
 class TicketAgent:
@@ -28,18 +32,46 @@ class TicketAgent:
             return self._respond_with_llm(request)
         return self._respond_locally(request)
 
+    def _get_reasoning_effort(self) -> str | None:
+        override = os.getenv("AZURE_OPENAI_REASONING_EFFORT")
+        if override is None:
+            return None
+
+        value = override.strip().lower()
+        if value in {"", "false", "0", "off", "no", "none"}:
+            return None
+
+        valid_values = {"low", "medium", "high"}
+        if value not in valid_values:
+            raise ValueError(
+                "AZURE_OPENAI_REASONING_EFFORT must be one of: low, medium, high. "
+                "Leave it unset or set it to false to disable it."
+            )
+        return value
+
     def _respond_with_llm(self, request: str) -> str:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": request},
         ]
+        request_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "tools": TicketTools.definitions(),
+            "tool_choice": "auto",
+        }
+        try:
+            reasoning_effort = self._get_reasoning_effort()
+        except ValueError as exc:
+            return f"Azure OpenAI configuration error: {exc}"
+        if reasoning_effort is not None:
+            request_kwargs["reasoning_effort"] = reasoning_effort
+
         for _ in range(5):
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=TicketTools.definitions(),
-                tool_choice="auto",
-            )
+            try:
+                response = self.llm_client.chat.completions.create(**request_kwargs)
+            except OpenAIError as exc:
+                return f"The language model request failed: {exc}"
             message = response.choices[0].message
             if not message.tool_calls:
                 return message.content or "I could not produce a response."

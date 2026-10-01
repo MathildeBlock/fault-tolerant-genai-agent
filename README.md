@@ -1,5 +1,24 @@
 # fault-tolerant-genai-agent
 
+## Prerequisites and Setup
+
+Install Python 3.11 or newer. From the repository root, create the virtual environment and install the dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+PowerShell activation is optional; all commands below use the virtual environment directly. Copy `env.example` to `.env` only if you want to use Azure OpenAI model-driven mode:
+
+```powershell
+Copy-Item env.example .env
+```
+
+Keep the real API key in `.env` only. The local CLI mode and automated tests do not require an Azure OpenAI key.
+
+Azure OpenAI is optional. Set `AZURE_OPENAI_REASONING_EFFORT` only when your deployment supports a supported reasoning value such as `low`, `medium`, or `high`; otherwise leave it unset.
+
 ## Part 1: Mock API
 
 From the repository root, start the API:
@@ -38,9 +57,9 @@ Run the tests with:
 
 ## Part 3: AI PR Review Bot
 
-The workflow in `.github/workflows/pr-review.yml` runs when a pull request is opened or updated. It fetches the pull request diff, sends it to the configured Azure OpenAI deployment, and posts one review comment.
+The workflow in `.github/workflows/pr-review.yml` runs when a pull request is opened or updated. It fetches the pull request diff, sends it to Azure OpenAI, and posts one review comment.
 
-Configure these GitHub repository secrets before using the workflow:
+The workflow expects these GitHub repository secrets to be configured:
 
 ```text
 AZURE_OPENAI_ENDPOINT
@@ -49,4 +68,28 @@ AZURE_OPENAI_DEPLOYMENT
 AZURE_OPENAI_API_VERSION
 ```
 
-The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
+Very large diffs are truncated before they are sent to the model, and the review is informational only.
+
+## Part 4: Terraform Azure Skeleton
+
+The `infra/` folder contains a minimal Azure App Service scaffold. It validates as a Terraform project, but it is not a complete production deployment.
+
+Validate it with:
+
+```powershell
+cd infra
+terraform init
+terraform validate
+```
+
+The default image is a placeholder nginx container, so this is not yet a live deployment of the FastAPI app. For a real deployment, replace `container_image` and `container_port` with values for the application image.
+
+For `terraform plan` or `terraform apply`, AzureRM requires a subscription ID. After `az login`, set it in the current PowerShell session:
+
+```powershell
+$env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
+```
+
+## Part 5: Production Design Decision
+
+For production, I would replace the in-memory ticket storage with a persistent database. The current API loses all tickets whenever it restarts, so durable storage would be the most important improvement.
