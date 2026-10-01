@@ -105,7 +105,7 @@ def test_llm_agent_omits_reasoning_by_default_for_standard_azure_model(monkeypat
 
 
 def test_llm_agent_uses_reasoning_effort_when_explicitly_enabled(monkeypatch):
-    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "true")
+    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "medium")
     calls = []
 
     class MockLLM:
@@ -132,7 +132,31 @@ def test_llm_agent_uses_reasoning_effort_when_explicitly_enabled(monkeypatch):
     agent.llm_client = MockLLM()
 
     assert agent.respond("List my tickets") == "Done"
-    assert calls[0]["reasoning_effort"] == "none"
+    assert calls[0]["reasoning_effort"] == "medium"
+
+
+def test_llm_agent_returns_actionable_error_for_invalid_reasoning_effort(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "unsupported")
+
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    raise AssertionError("should not call Azure when config is invalid")
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "custom-o-series-deployment"
+    agent.llm_client = MockLLM()
+
+    response = agent.respond("List my tickets")
+    assert "AZURE_OPENAI_REASONING_EFFORT" in response
+    assert "low, medium, high" in response
 
 
 def test_update_tool_leaves_status_validation_to_api():

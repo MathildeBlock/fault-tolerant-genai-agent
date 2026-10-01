@@ -32,15 +32,22 @@ class TicketAgent:
             return self._respond_with_llm(request)
         return self._respond_locally(request)
 
-    def _supports_reasoning_effort(self) -> bool:
+    def _get_reasoning_effort(self) -> str | None:
         override = os.getenv("AZURE_OPENAI_REASONING_EFFORT")
-        if override is not None:
-            return override.strip().lower() in {"1", "true", "yes", "on"}
+        if override is None:
+            return None
 
-        # Azure deployment names are not guaranteed to match the underlying model family.
-        # To avoid sending unsupported parameters to arbitrary deployments, reasoning effort
-        # is opt-in via an explicit environment variable unless the caller chooses otherwise.
-        return False
+        value = override.strip().lower()
+        if value in {"", "false", "0", "off", "no", "none"}:
+            return None
+
+        valid_values = {"low", "medium", "high"}
+        if value not in valid_values:
+            raise ValueError(
+                "AZURE_OPENAI_REASONING_EFFORT must be one of: low, medium, high. "
+                "Leave it unset or set it to false to disable it."
+            )
+        return value
 
     def _respond_with_llm(self, request: str) -> str:
         messages: list[dict[str, Any]] = [
@@ -53,8 +60,12 @@ class TicketAgent:
             "tools": TicketTools.definitions(),
             "tool_choice": "auto",
         }
-        if self._supports_reasoning_effort():
-            request_kwargs["reasoning_effort"] = "none"
+        try:
+            reasoning_effort = self._get_reasoning_effort()
+        except ValueError as exc:
+            return f"Azure OpenAI configuration error: {exc}"
+        if reasoning_effort is not None:
+            request_kwargs["reasoning_effort"] = reasoning_effort
 
         for _ in range(5):
             try:
