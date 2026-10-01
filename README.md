@@ -17,6 +17,8 @@ Copy-Item env.example .env
 
 Keep the real API key in `.env` only. The local CLI mode and automated tests do not require an Azure OpenAI key.
 
+When using Azure OpenAI, only send `reasoning_effort` for reasoning-capable deployments such as GPT-5 or O-series models. Standard deployments such as `gpt-4o-mini` are supported without this parameter.
+
 ## Part 1: Mock API
 
 From the repository root, start the API:
@@ -55,10 +57,9 @@ Run the tests with:
 
 ## Part 3: AI PR Review Bot
 
-The workflow in `.github/workflows/pr-review.yml` runs when a pull request is opened or updated. It fetches the pull request diff, sends it to the configured Azure OpenAI deployment, and posts one review comment.
-The automated review is informational and does not block merging.
+The workflow in `.github/workflows/pr-review.yml` runs when a pull request is opened or updated. It fetches the pull request diff, sends it to Azure OpenAI, and posts one review comment.
 
-Configure these GitHub repository secrets before using the workflow:
+The workflow expects these GitHub repository secrets to be configured:
 
 ```text
 AZURE_OPENAI_ENDPOINT
@@ -67,19 +68,13 @@ AZURE_OPENAI_DEPLOYMENT
 AZURE_OPENAI_API_VERSION
 ```
 
-The workflow does not run on ordinary branch pushes. To test it, push the workflow to GitHub and open a pull request, or push another commit to an existing pull request. Check the repository's **Actions** tab for the run and the pull request for the generated comment.
-
-Very large pull request diffs are capped before they are sent to the model. The generated comment is explicitly marked as incomplete when truncation occurs.
-
-Use API version `2024-12-01-preview` or newer. The review model requires the `max_completion_tokens` parameter supported by that API version.
-
-The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
+Very large diffs are truncated before they are sent to the model, and the review is informational only.
 
 ## Part 4: Terraform Azure Skeleton
 
-The `infra/` folder describes a minimal Azure deployment using a resource group, Linux App Service plan, and Linux Web App. It does not deploy anything by itself and does not create networking, storage accounts, or Key Vault resources.
+The `infra/` folder contains a minimal Azure App Service scaffold. It validates as a Terraform project, but it is not a complete production deployment.
 
-Validate the Terraform configuration:
+Validate it with:
 
 ```powershell
 cd infra
@@ -87,22 +82,13 @@ terraform init
 terraform validate
 ```
 
-Terraform is only required for this validation step; it does not deploy resources. Run `terraform init` before `terraform validate` so the AzureRM and Random providers are downloaded.
+The default image is a placeholder nginx container, so this is not yet a live deployment of the FastAPI app. For a real deployment, replace `container_image` and `container_port` with values for the application image.
 
-The default container image is a public placeholder nginx image listening on port 80. The skeleton does not configure private registry credentials; add registry configuration before using a private image. Set `container_image` and `container_port` to values matching an image containing this FastAPI application for a real deployment. Terraform uses a short generated App Service plan name and adds a 12-character random suffix to the Web App name, substantially reducing collisions while respecting Azure naming limits.
-
-With the default nginx image, the `api_url` Terraform output is only the URL of the placeholder Web App; it is not a functioning deployment of this FastAPI API until `container_image` is replaced with an image containing the application.
-
-Custom `app_name` values must be 2-47 characters using lowercase letters, numbers, or hyphens. They cannot start or end with a hyphen. The Terraform validation also requires `container_port` to be an integer from 1 through 65535.
-
-For `terraform plan` or `terraform apply`, AzureRM v4 requires a subscription ID. After `az login`, set it for the current PowerShell session:
+For `terraform plan` or `terraform apply`, AzureRM requires a subscription ID. After `az login`, set it in the current PowerShell session:
 
 ```powershell
 $env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
 ```
-
-You can also provide it directly with `-var="subscription_id=<your-subscription-id>"`. `terraform validate` does not require Azure credentials.
-
 
 ## Part 5: Production Design Decision
 

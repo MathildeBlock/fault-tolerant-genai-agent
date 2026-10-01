@@ -32,20 +32,31 @@ class TicketAgent:
             return self._respond_with_llm(request)
         return self._respond_locally(request)
 
+    def _supports_reasoning_effort(self) -> bool:
+        override = os.getenv("AZURE_OPENAI_REASONING_EFFORT")
+        if override is not None:
+            return override.strip().lower() in {"1", "true", "yes", "on"}
+
+        normalized = self.model.lower()
+        return any(marker in normalized for marker in ("gpt-5", "o1", "o3", "o4", "reasoning"))
+
     def _respond_with_llm(self, request: str) -> str:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": request},
         ]
+        request_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "tools": TicketTools.definitions(),
+            "tool_choice": "auto",
+        }
+        if self._supports_reasoning_effort():
+            request_kwargs["reasoning_effort"] = "none"
+
         for _ in range(5):
             try:
-                response = self.llm_client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=TicketTools.definitions(),
-                    tool_choice="auto",
-                    reasoning_effort="none",
-                )
+                response = self.llm_client.chat.completions.create(**request_kwargs)
             except OpenAIError as exc:
                 return f"The language model request failed: {exc}"
             message = response.choices[0].message

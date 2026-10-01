@@ -73,7 +73,7 @@ def test_agent_handles_non_uuid_ticket_id():
     assert "non-existent-id" in response
 
 
-def test_llm_agent_disables_reasoning_for_chat_tools():
+def test_llm_agent_omits_reasoning_for_standard_azure_model():
     calls = []
 
     class MockLLM:
@@ -96,6 +96,37 @@ def test_llm_agent_disables_reasoning_for_chat_tools():
         chat = Chat()
 
     agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "gpt-4o-mini"
+    agent.llm_client = MockLLM()
+
+    assert agent.respond("List my tickets") == "Done"
+    assert "reasoning_effort" not in calls[0]
+
+
+def test_llm_agent_enables_reasoning_for_reasoning_model():
+    calls = []
+
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    calls.append(kwargs)
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="Done", tool_calls=None)
+                            )
+                        ]
+                    )
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.model = "gpt-5-mini"
     agent.llm_client = MockLLM()
 
     assert agent.respond("List my tickets") == "Done"
