@@ -17,13 +17,13 @@ def main() -> None:
         while True:
             try:
                 request = input("you> ").strip()
+                if request.lower() in {"exit", "quit"}:
+                    break
+                if request:
+                    print(f"agent> {agent.respond(request)}")
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
-            if request.lower() in {"exit", "quit"}:
-                break
-            if request:
-                print(f"agent> {agent.respond(request)}")
     finally:
         api.close()
 
