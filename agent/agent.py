@@ -7,12 +7,16 @@ import os
 import re
 from typing import Any
 
+from openai import OpenAIError
+
 from .client import TicketAPIClient, TicketAPIError, TicketTools
 
 
 SYSTEM_PROMPT = """You are a support-ticket assistant. Use the ticket tools for every ticket operation.
 Never invent ticket data. When a tool returns an error, explain its detail clearly and tell the user
-what they can do next. Valid statuses are OPEN, RESOLVED, and CLOSED."""
+what they can do next. Valid statuses are OPEN, RESOLVED, and CLOSED. Do not silently translate or
+normalize an unsupported status such as PROGRESS; pass the user's status to the update tool so the
+ticket API can validate it and return its actionable error message."""
 
 
 class TicketAgent:
@@ -34,12 +38,16 @@ class TicketAgent:
             {"role": "user", "content": request},
         ]
         for _ in range(5):
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=TicketTools.definitions(),
-                tool_choice="auto",
-            )
+            try:
+                response = self.llm_client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=TicketTools.definitions(),
+                    tool_choice="auto",
+                    reasoning_effort="none",
+                )
+            except OpenAIError as exc:
+                return f"The language model request failed: {exc}"
             message = response.choices[0].message
             if not message.tool_calls:
                 return message.content or "I could not produce a response."

@@ -49,7 +49,13 @@ class TicketAPIClient:
             raise TicketAPIError(response.status_code, str(detail))
         if response.status_code == 204:
             return None
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise TicketAPIError(
+                response.status_code,
+                "The ticketing API returned an empty or invalid JSON response.",
+            ) from exc
 
     def create_ticket(self, title: str, description: str) -> dict[str, Any]:
         return self._request("POST", "/tickets", json={"title": title, "description": description})
@@ -139,7 +145,10 @@ class TicketTools:
                             "ticket_id": {"type": "string"},
                             "title": {"type": "string"},
                             "description": {"type": "string"},
-                            "status": {"type": "string", "enum": ["OPEN", "RESOLVED", "CLOSED"]},
+                            "status": {
+                                "type": "string",
+                                "description": "Pass the user's status exactly so the API can validate it.",
+                            },
                             "resolution": {"type": "string"},
                             "comment": {"type": "string"},
                         },

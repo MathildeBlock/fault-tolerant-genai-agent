@@ -69,6 +69,27 @@ def test_review_diff_returns_successful_review(monkeypatch):
     assert analyze_pr.review_diff("diff") == "## Summary\nLooks good."
 
 
+def test_review_diff_marks_truncated_reviews(monkeypatch):
+    class SuccessfulClient:
+        def __init__(self, **kwargs):
+            message = SimpleNamespace(content="Review summary", refusal=None)
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: SimpleNamespace(
+                        choices=[SimpleNamespace(message=message)]
+                    )
+                )
+            )
+
+    configure_review_environment(monkeypatch)
+    monkeypatch.setattr(analyze_pr, "AzureOpenAI", SuccessfulClient)
+
+    result = analyze_pr.review_diff("x" * (analyze_pr.MAX_DIFF_CHARACTERS + 1))
+
+    assert "review is incomplete" in result
+    assert "truncated" in result
+
+
 def test_review_diff_reports_refusal(monkeypatch):
     class RefusingClient:
         def __init__(self, **kwargs):

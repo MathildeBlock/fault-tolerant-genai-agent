@@ -65,6 +65,16 @@ def prepare_diff(diff: str) -> str:
         + "\n\n[Diff truncated to fit the model context window.]")
 
 
+def review_notice(review: str, diff: str) -> str:
+    if len(diff) > MAX_DIFF_CHARACTERS:
+        return (
+            "[Warning: This review is incomplete because the pull request diff was "
+            "truncated to fit the model context window.]\n\n"
+            + review
+        )
+    return review
+
+
 def review_diff(diff: str) -> str:
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "<missing>").strip()
     try:
@@ -109,14 +119,18 @@ def review_diff(diff: str) -> str:
             f"Azure OpenAI configuration error for endpoint {endpoint!r}: {exc}"
         ) from exc
     if not response.choices:
-        return "The model returned no review choices. Please review the diff manually."
+        return review_notice(
+            "The model returned no review choices. Please review the diff manually.", diff
+        )
     message = response.choices[0].message
     if message.content and message.content.strip():
-        return message.content.strip()
+        return review_notice(message.content.strip(), diff)
     refusal = getattr(message, "refusal", None)
     if refusal:
-        return f"The model declined to review this diff: {refusal}"
-    return "The model returned no visible review text. Please review the diff manually."
+        return review_notice(f"The model declined to review this diff: {refusal}", diff)
+    return review_notice(
+        "The model returned no visible review text. Please review the diff manually.", diff
+    )
 
 
 def main() -> None:

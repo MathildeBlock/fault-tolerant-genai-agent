@@ -69,6 +69,8 @@ AZURE_OPENAI_API_VERSION
 
 The workflow does not run on ordinary branch pushes. To test it, push the workflow to GitHub and open a pull request, or push another commit to an existing pull request. Check the repository's **Actions** tab for the run and the pull request for the generated comment.
 
+Very large pull request diffs are capped before they are sent to the model. The generated comment is explicitly marked as incomplete when truncation occurs.
+
 Use API version `2024-12-01-preview` or newer. The review model requires the `max_completion_tokens` parameter supported by that API version.
 
 The workflow uses the built-in `GITHUB_TOKEN` to read the diff and write the comment. Pull requests from forks may not receive repository secrets, so the workflow is intended for pull requests within the repository unless a secure fork-handling design is added.
