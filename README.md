@@ -15,6 +15,8 @@ PowerShell activation is optional; all commands below use the virtual environmen
 Copy-Item env.example .env
 ```
 
+On macOS/Linux, use `.venv/bin/python` instead of `.\.venv\Scripts\python.exe` and `cp env.example .env` instead of `Copy-Item`.
+
 Keep the real API key in `.env` only. The local CLI mode and automated tests do not require an Azure OpenAI key.
 
 Azure OpenAI is optional. Set `AZURE_OPENAI_REASONING_EFFORT` only when your deployment supports a supported reasoning value such as `low`, `medium`, or `high`; otherwise leave it unset.

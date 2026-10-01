@@ -81,6 +81,8 @@ class TicketAgent:
                     result = self.tools.execute(call.function.name, json.loads(call.function.arguments))
                 except TicketAPIError as exc:
                     result = {"error": exc.user_message()}
+                except (TypeError, ValueError) as exc:
+                    result = {"error": f"Invalid tool call: {exc}"}
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)}
                 )

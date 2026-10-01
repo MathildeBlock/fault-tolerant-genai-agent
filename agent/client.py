@@ -83,10 +83,20 @@ class TicketAPIClient:
 class TicketTools:
     """Tool registry used by the local parser or an LLM function-calling loop."""
 
+    _TOOL_NAMES = {
+        "create_ticket",
+        "list_tickets",
+        "get_ticket",
+        "update_ticket",
+        "delete_ticket",
+    }
+
     def __init__(self, api: TicketAPIClient):
         self.api = api
 
     def execute(self, name: str, arguments: dict[str, Any]) -> Any:
+        if name not in self._TOOL_NAMES:
+            raise ValueError(f"Unknown ticket tool: {name}")
         tool = getattr(self.api, name)
         return tool(**arguments)
 

@@ -15,11 +15,15 @@ def main() -> None:
     print("Ticket agent ready. Type 'exit' to quit.")
     try:
         while True:
-            request = input("you> ").strip()
-            if request.lower() in {"exit", "quit"}:
+            try:
+                request = input("you> ").strip()
+                if request.lower() in {"exit", "quit"}:
+                    break
+                if request:
+                    print(f"agent> {agent.respond(request)}")
+            except (EOFError, KeyboardInterrupt):
+                print()
                 break
-            if request:
-                print(f"agent> {agent.respond(request)}")
     finally:
         api.close()
 
