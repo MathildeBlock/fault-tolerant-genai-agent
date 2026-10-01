@@ -12,6 +12,20 @@ def make_agent(handler):
     return TicketAgent(TicketAPIClient("http://ticket-api", client=client))
 
 
+def make_tool_call_message(tool_name, arguments, call_id="call-1"):
+    tool_calls = [
+        SimpleNamespace(
+            id=call_id,
+            function=SimpleNamespace(name=tool_name, arguments=arguments),
+        )
+    ]
+    return SimpleNamespace(
+        content=None,
+        tool_calls=tool_calls,
+        model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": tool_calls},
+    )
+
+
 def test_agent_reports_invalid_status_from_api():
     def handler(request):
         return httpx.Response(
@@ -157,6 +171,70 @@ def test_llm_agent_returns_actionable_error_for_invalid_reasoning_effort(monkeyp
     response = agent.respond("List my tickets")
     assert "AZURE_OPENAI_REASONING_EFFORT" in response
     assert "low, medium, high" in response
+
+
+def test_llm_agent_returns_tool_error_for_malformed_arguments():
+    class MockLLM:
+        class Chat:
+            class Completions:
+                calls = 0
+
+                @classmethod
+                def create(cls, **kwargs):
+                    cls.calls += 1
+                    if cls.calls == 1:
+                        return SimpleNamespace(
+                            choices=[
+                                SimpleNamespace(
+                                    message=make_tool_call_message("not_a_ticket_tool", "{}")
+                                )
+                            ]
+                        )
+                    assert kwargs["messages"][-1]["content"] == (
+                        '{"error": "Invalid tool call: Unknown ticket tool: not_a_ticket_tool"}'
+                    )
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="I could not use that tool.", tool_calls=None)
+                            )
+                        ]
+                    )
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.llm_client = MockLLM()
+
+    assert agent.respond("Do something") == "I could not use that tool."
+
+
+def test_llm_agent_returns_tool_error_for_invalid_json():
+    class MockLLM:
+        class Chat:
+            class Completions:
+                @staticmethod
+                def create(**kwargs):
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                    message=make_tool_call_message("list_tickets", "{bad-json")
+                            )
+                        ]
+                    )
+
+            def __init__(self):
+                self.completions = self.Completions()
+
+        chat = Chat()
+
+    agent = make_agent(lambda request: httpx.Response(200, json={}))
+    agent.llm_client = MockLLM()
+
+    assert agent.respond("List tickets") == "I could not complete the request within the tool-call limit."
 
 
 def test_update_tool_leaves_status_validation_to_api():

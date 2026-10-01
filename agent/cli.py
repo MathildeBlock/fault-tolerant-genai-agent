@@ -15,7 +15,11 @@ def main() -> None:
     print("Ticket agent ready. Type 'exit' to quit.")
     try:
         while True:
-            request = input("you> ").strip()
+            try:
+                request = input("you> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
             if request.lower() in {"exit", "quit"}:
                 break
             if request:

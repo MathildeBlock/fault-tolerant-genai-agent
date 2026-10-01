@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 VALID_STATUSES = ("OPEN", "RESOLVED", "CLOSED")
 
@@ -16,6 +16,13 @@ class TicketCreate(BaseModel):
     title: str
     description: str
 
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Title must not be blank.")
+        return value
+
 
 class TicketUpdate(BaseModel):
     title: Optional[str] = None
@@ -23,6 +30,13 @@ class TicketUpdate(BaseModel):
     status: Optional[str] = None
     resolution: Optional[str] = None
     comment: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def updated_title_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.strip():
+            raise ValueError("Title must not be blank.")
+        return value
 
 
 def now() -> str:
