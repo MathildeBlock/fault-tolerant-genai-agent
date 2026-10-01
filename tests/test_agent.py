@@ -216,12 +216,29 @@ def test_llm_agent_returns_tool_error_for_invalid_json():
     class MockLLM:
         class Chat:
             class Completions:
-                @staticmethod
-                def create(**kwargs):
+                calls = 0
+
+                @classmethod
+                def create(cls, **kwargs):
+                    cls.calls += 1
+                    if cls.calls == 1:
+                        return SimpleNamespace(
+                            choices=[
+                                SimpleNamespace(
+                                    message=make_tool_call_message("list_tickets", "{bad-json")
+                                )
+                            ]
+                        )
+                    assert kwargs["messages"][-1]["content"].startswith(
+                        '{"error": "Invalid tool call: '
+                    )
+                    assert "Expecting property name enclosed in double quotes" in (
+                        kwargs["messages"][-1]["content"]
+                    )
                     return SimpleNamespace(
                         choices=[
                             SimpleNamespace(
-                                    message=make_tool_call_message("list_tickets", "{bad-json")
+                                message=SimpleNamespace(content="The tool arguments were invalid.", tool_calls=None)
                             )
                         ]
                     )
@@ -234,7 +251,7 @@ def test_llm_agent_returns_tool_error_for_invalid_json():
     agent = make_agent(lambda request: httpx.Response(200, json={}))
     agent.llm_client = MockLLM()
 
-    assert agent.respond("List tickets") == "I could not complete the request within the tool-call limit."
+    assert agent.respond("List tickets") == "The tool arguments were invalid."
 
 
 def test_update_tool_leaves_status_validation_to_api():

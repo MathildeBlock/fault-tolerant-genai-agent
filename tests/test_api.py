@@ -25,6 +25,13 @@ def test_blank_title_is_rejected():
     assert "Title must not be blank" in response.json()["detail"][0]["msg"]
 
 
+def test_blank_title_update_is_rejected():
+    ticket = make_ticket()
+    response = client.patch(f"/tickets/{ticket['id']}", json={"title": "   "})
+    assert response.status_code == 422
+    assert "Title must not be blank" in response.json()["detail"][0]["msg"]
+
+
 def test_unknown_id_404():
     assert client.get("/tickets/nope").status_code == 404
     assert client.patch("/tickets/nope", json={"status": "CLOSED"}).status_code == 404
