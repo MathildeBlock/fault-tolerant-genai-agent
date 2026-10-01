@@ -73,7 +73,8 @@ def test_agent_handles_non_uuid_ticket_id():
     assert "non-existent-id" in response
 
 
-def test_llm_agent_omits_reasoning_for_standard_azure_model():
+def test_llm_agent_omits_reasoning_by_default_for_standard_azure_model(monkeypatch):
+    monkeypatch.delenv("AZURE_OPENAI_REASONING_EFFORT", raising=False)
     calls = []
 
     class MockLLM:
@@ -103,7 +104,8 @@ def test_llm_agent_omits_reasoning_for_standard_azure_model():
     assert "reasoning_effort" not in calls[0]
 
 
-def test_llm_agent_enables_reasoning_for_reasoning_model():
+def test_llm_agent_uses_reasoning_effort_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_REASONING_EFFORT", "true")
     calls = []
 
     class MockLLM:
@@ -126,7 +128,7 @@ def test_llm_agent_enables_reasoning_for_reasoning_model():
         chat = Chat()
 
     agent = make_agent(lambda request: httpx.Response(200, json={}))
-    agent.model = "gpt-5-mini"
+    agent.model = "custom-o-series-deployment"
     agent.llm_client = MockLLM()
 
     assert agent.respond("List my tickets") == "Done"

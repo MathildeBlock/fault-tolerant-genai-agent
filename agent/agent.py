@@ -37,8 +37,10 @@ class TicketAgent:
         if override is not None:
             return override.strip().lower() in {"1", "true", "yes", "on"}
 
-        normalized = self.model.lower()
-        return any(marker in normalized for marker in ("gpt-5", "o1", "o3", "o4", "reasoning"))
+        # Azure deployment names are not guaranteed to match the underlying model family.
+        # To avoid sending unsupported parameters to arbitrary deployments, reasoning effort
+        # is opt-in via an explicit environment variable unless the caller chooses otherwise.
+        return False
 
     def _respond_with_llm(self, request: str) -> str:
         messages: list[dict[str, Any]] = [
