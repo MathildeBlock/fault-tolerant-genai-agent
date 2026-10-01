@@ -17,7 +17,7 @@ Copy-Item env.example .env
 
 Keep the real API key in `.env` only. The local CLI mode and automated tests do not require an Azure OpenAI key.
 
-When using Azure OpenAI, only send `reasoning_effort` for reasoning-capable deployments such as GPT-5 or O-series models. Standard deployments such as `gpt-4o-mini` are supported without this parameter.
+Azure OpenAI is optional. Set `AZURE_OPENAI_REASONING_EFFORT` only when your deployment supports a supported reasoning value such as `low`, `medium`, or `high`; otherwise leave it unset.
 
 ## Part 1: Mock API
 
